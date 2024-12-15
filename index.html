@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS 1.6 Bunny Hop Server</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+
+        header {
+            background: url('logo.jpg') no-repeat center center;
+            background-size: contain;
+            height: 200px;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        h1,
+        h2 {
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid #ddd;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f4f4f9;
+            cursor: pointer;
+        }
+
+        th span {
+            margin-left: 5px;
+            font-size: 0.8em;
+        }
+
+        .pagination {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .pagination button {
+            margin: 2px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .search {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .search input {
+            padding: 5px;
+            width: 50%;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+    </header>
+    <div class="container">
+        <section>
+            <h2>About the Server</h2>
+            <p>Welcome to our CS 1.6 Bunny Hop Server! Test your skills on a variety of maps with different difficulty
+                levels. Connect with the community and enjoy the challenge.</p>
+        </section>
+        <section>
+            <h2>Map List</h2>
+            <div class="search">
+                <input type="text" id="search-input" placeholder="Search by Map Name..." oninput="handleSearch()">
+            </div>
+            <table id="map-table">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Map Name<span id="arrow-0">▲</span></th>
+                        <th onclick="sortTable(1)">Type<span id="arrow-1">▲</span></th>
+                        <th onclick="sortTable(2)">Difficulty<span id="arrow-2">▲</span></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div class="pagination" id="pagination"></div>
+        </section>
+    </div>
+    <script>
+        const rowsPerPage = 50;
+        let currentPage = 1;
+        let allRows = [];
+        let filteredRows = [];
+
+        // Load the Excel file directly from the server
+        fetch('finalMapList.xlsx')
+            .then(response => response.arrayBuffer())
+            .then(data => {
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+
+                const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+                allRows = json.map(row => [
+                    row[Object.keys(row)[0]], // Map Name
+                    row[Object.keys(row)[1]], // Type
+                    row[Object.keys(row)[2]]  // Difficulty
+                ]);
+
+                filteredRows = allRows; // Initially, all rows are displayed
+                displayPage(currentPage);
+                updatePagination();
+            })
+            .catch(error => {
+                console.error('Error loading the Excel file:', error);
+                document.querySelector('#map-table tbody').innerHTML = '<tr><td colspan="3">Failed to load map list.</td></tr>';
+            });
+
+        function displayPage(page) {
+            const tableBody = document.querySelector('#map-table tbody');
+            tableBody.innerHTML = '';
+
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const rows = filteredRows.slice(start, end);
+
+            rows.forEach(row => {
+                const tr = document.createElement('tr');
+                row.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function updatePagination() {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+
+            const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.disabled = i === currentPage;
+                button.addEventListener('click', () => {
+                    currentPage = i;
+                    displayPage(currentPage);
+                    updatePagination();
+                });
+                pagination.appendChild(button);
+            }
+        }
+
+        function handleSearch() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+
+            filteredRows = allRows.filter(row =>
+                row[0].toLowerCase().includes(query) // Filter by Map Name (first column)
+            );
+
+            currentPage = 1; // Reset to the first page after search
+            displayPage(currentPage);
+            updatePagination();
+        }
+
+        // Function to sort table columns
+        let sortOrder = [true, true, true]; // Tracks ascending/descending for each column
+
+        function sortTable(columnIndex) {
+            filteredRows.sort((a, b) => {
+                const cellA = a[columnIndex]?.toLowerCase() || '';
+                const cellB = b[columnIndex]?.toLowerCase() || '';
+
+                if (cellA < cellB) return sortOrder[columnIndex] ? -1 : 1;
+                if (cellA > cellB) return sortOrder[columnIndex] ? 1 : -1;
+                return 0;
+            });
+
+            sortOrder[columnIndex] = !sortOrder[columnIndex];
+            displayPage(currentPage);
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</body>
+
+</html>
