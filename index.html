@@ -6,38 +6,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CS 1.6 Bunny Hop Server</title>
     <style>
+        /* Dark Mode Styles */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f9;
+            background-color: #1f1f1f;
+            color: #f4f4f9;
+            background-image: url('bhop-background.jpg');
+            background-size: cover;
+            background-position: center;
+            animation: moveBackground 30s linear infinite;
+        }
+
+        @keyframes moveBackground {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: -1000px 0;
+            }
         }
 
         header {
             background: url('logo.jpg') no-repeat center center;
             background-size: contain;
             height: 200px;
+            border-bottom: 4px solid #f4f4f9;
         }
 
         .container {
             padding: 20px;
+            background-color: #2c2c2c;
+            border-radius: 10px;
         }
 
         h1,
         h2 {
-            color: #333;
+            color: #f4f4f9;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            background-color: #333;
+            border-radius: 8px;
         }
 
         table,
         th,
         td {
-            border: 1px solid #ddd;
+            border: 1px solid #444;
         }
 
         th,
@@ -47,41 +69,72 @@
         }
 
         th {
-            background-color: #f4f4f9;
+            background-color: #444;
+            color: #f4f4f9;
             cursor: pointer;
-        }
-
-        th span {
-            margin-left: 5px;
-            font-size: 0.8em;
-        }
-
-        .pagination {
-            margin-top: 10px;
-            text-align: center;
+            position: relative;
         }
 
         .pagination button {
             margin: 2px;
             padding: 5px 10px;
+            background-color: #555;
+            color: #f4f4f9;
             cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
         }
 
-        .search {
-            margin-bottom: 10px;
-            text-align: center;
+        .pagination button:hover {
+            background-color: #d35400;
+            transform: scale(1.1);
         }
 
         .search input {
             padding: 5px;
             width: 50%;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background-color: #555;
+            color: #f4f4f9;
+        }
+
+        .search input::placeholder {
+            color: #aaa;
+        }
+
+        .search input:focus {
+            outline: none;
+            border: 1px solid #d35400;
+            background-color: #444;
+        }
+
+        #type-dropdown,
+        #difficulty-dropdown {
+            display: none;
+            position: absolute;
+            background-color: #2c2c2c;
+            color: #f4f4f9;
+            border: 1px solid #444;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 200px;
+        }
+
+        #type-dropdown label,
+        #difficulty-dropdown label {
+            display: block;
+            margin: 5px 0;
+            cursor: pointer;
         }
     </style>
 </head>
 
 <body>
-    <header>
-    </header>
+    <header></header>
     <div class="container">
         <section>
             <h2>About the Server</h2>
@@ -96,9 +149,17 @@
             <table id="map-table">
                 <thead>
                     <tr>
-                        <th onclick="sortTable(0)">Map Name<span id="arrow-0">▲</span></th>
-                        <th onclick="sortTable(1)">Type<span id="arrow-1">▲</span></th>
-                        <th onclick="sortTable(2)">Difficulty<span id="arrow-2">▲</span></th>
+                        <th onclick="sortTable(0)">Map Name</th>
+                        <th>
+                            Type
+                            <button onclick="toggleTypeDropdown()">▼</button>
+                            <div id="type-dropdown"></div>
+                        </th>
+                        <th>
+                            Difficulty
+                            <button onclick="toggleDifficultyDropdown()">▼</button>
+                            <div id="difficulty-dropdown"></div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -106,13 +167,17 @@
             <div class="pagination" id="pagination"></div>
         </section>
     </div>
+
     <script>
         const rowsPerPage = 50;
         let currentPage = 1;
         let allRows = [];
         let filteredRows = [];
+        let selectedTypes = new Set();
+        let selectedDifficulties = new Set();
+        let selectedSortType = null;  // Track Type sort
+        let selectedSortDifficulty = null;  // Track Difficulty sort
 
-        // Load the Excel file directly from the server
         fetch('finalMapList.xlsx')
             .then(response => response.arrayBuffer())
             .then(data => {
@@ -127,9 +192,11 @@
                     row[Object.keys(row)[2]]  // Difficulty
                 ]);
 
-                filteredRows = allRows; // Initially, all rows are displayed
+                filteredRows = allRows;
                 displayPage(currentPage);
                 updatePagination();
+                populateTypeDropdown();
+                populateDifficultyDropdown();
             })
             .catch(error => {
                 console.error('Error loading the Excel file:', error);
@@ -139,7 +206,6 @@
         function displayPage(page) {
             const tableBody = document.querySelector('#map-table tbody');
             tableBody.innerHTML = '';
-
             const start = (page - 1) * rowsPerPage;
             const end = start + rowsPerPage;
             const rows = filteredRows.slice(start, end);
@@ -158,7 +224,6 @@
         function updatePagination() {
             const pagination = document.getElementById('pagination');
             pagination.innerHTML = '';
-
             const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
 
             for (let i = 1; i <= totalPages; i++) {
@@ -176,31 +241,104 @@
 
         function handleSearch() {
             const query = document.getElementById('search-input').value.toLowerCase();
-
             filteredRows = allRows.filter(row =>
-                row[0].toLowerCase().includes(query) // Filter by Map Name (first column)
+                row[0].toLowerCase().includes(query)
             );
-
-            currentPage = 1; // Reset to the first page after search
+            currentPage = 1;
             displayPage(currentPage);
             updatePagination();
         }
 
-        // Function to sort table columns
-        let sortOrder = [true, true, true]; // Tracks ascending/descending for each column
+        function populateTypeDropdown() {
+            const typeDropdown = document.getElementById('type-dropdown');
+            typeDropdown.innerHTML = '';
+
+            const uniqueTypes = [...new Set(allRows.map(row => row[1]))].sort();
+
+            uniqueTypes.forEach(type => {
+                const label = document.createElement('label');
+                label.innerHTML = `
+                    <input type="checkbox" value="${type}" onchange="filterByType()"> ${type}
+                `;
+                typeDropdown.appendChild(label);
+            });
+        }
+
+        function populateDifficultyDropdown() {
+            const difficultyDropdown = document.getElementById('difficulty-dropdown');
+            difficultyDropdown.innerHTML = '';
+
+            const uniqueDifficulties = [...new Set(allRows.map(row => row[2]))].sort();
+
+            uniqueDifficulties.forEach(difficulty => {
+                const label = document.createElement('label');
+                label.innerHTML = `
+                    <input type="checkbox" value="${difficulty}" onchange="filterByDifficulty()"> ${difficulty}
+                `;
+                difficultyDropdown.appendChild(label);
+            });
+        }
+
+        function toggleTypeDropdown() {
+            const dropdown = document.getElementById('type-dropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleDifficultyDropdown() {
+            const dropdown = document.getElementById('difficulty-dropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function filterByType() {
+            const checkboxes = document.querySelectorAll('#type-dropdown input[type="checkbox"]');
+            selectedTypes = new Set(
+                [...checkboxes].filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
+            );
+
+            filteredRows = (selectedTypes.size > 0)
+                ? allRows.filter(row => selectedTypes.has(row[1]))
+                : allRows;
+
+            currentPage = 1;
+            displayPage(currentPage);
+            updatePagination();
+        }
+
+        function filterByDifficulty() {
+            const checkboxes = document.querySelectorAll('#difficulty-dropdown input[type="checkbox"]');
+            selectedDifficulties = new Set(
+                [...checkboxes].filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
+            );
+
+            filteredRows = (selectedDifficulties.size > 0)
+                ? allRows.filter(row => selectedDifficulties.has(row[2]))
+                : allRows;
+
+            currentPage = 1;
+            displayPage(currentPage);
+            updatePagination();
+        }
 
         function sortTable(columnIndex) {
-            filteredRows.sort((a, b) => {
-                const cellA = a[columnIndex]?.toLowerCase() || '';
-                const cellB = b[columnIndex]?.toLowerCase() || '';
+            if (columnIndex === 1) {
+                const isAscending = selectedSortType = !selectedSortType;
+                filteredRows.sort((a, b) => {
+                    const valueA = a[columnIndex] || '';
+                    const valueB = b[columnIndex] || '';
+                    return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+                });
+            } else if (columnIndex === 2) {
+                const isAscending = selectedSortDifficulty = !selectedSortDifficulty;
+                filteredRows.sort((a, b) => {
+                    const valueA = a[columnIndex] || '';
+                    const valueB = b[columnIndex] || '';
+                    return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+                });
+            }
 
-                if (cellA < cellB) return sortOrder[columnIndex] ? -1 : 1;
-                if (cellA > cellB) return sortOrder[columnIndex] ? 1 : -1;
-                return 0;
-            });
-
-            sortOrder[columnIndex] = !sortOrder[columnIndex];
+            currentPage = 1;
             displayPage(currentPage);
+            updatePagination();
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
