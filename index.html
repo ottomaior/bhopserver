@@ -2,11 +2,11 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CS 1.6 Bunny Hop Server</title>
     <style>
-        /* Dark Mode Styles */
+        /* Base Styles */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -19,6 +19,19 @@
             animation: moveBackground 30s linear infinite;
         }
 
+        /* Subtle gradient overlay for better readability */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom right, rgba(31, 31, 31, 0.7), rgba(0, 0, 0, 0.7));
+            pointer-events: none;
+            z-index: 1;
+        }
+
         @keyframes moveBackground {
             0% {
                 background-position: 0 0;
@@ -29,23 +42,103 @@
             }
         }
 
-        header {
-            background: url('logo.jpg') no-repeat center center;
-            background-size: contain;
-            height: 200px;
+        /* Navigation bar */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 10000;
+            background-color: #2c2c2c;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             border-bottom: 4px solid #f4f4f9;
         }
 
+        nav a {
+            color: #f4f4f9;
+            text-decoration: none;
+            margin: 0 10px;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        nav a:hover {
+            color: #d35400;
+        }
+
+        header {
+            background: url('logo.jpg') no-repeat center center;
+            background-size: contain;
+            height: 250px;
+            border-bottom: 4px solid #f4f4f9;
+            position: relative;
+            z-index: 3;
+            /* Ensure header is above the overlay */
+        }
+
         .container {
+            position: relative;
+            z-index: 2;
+            /* container above overlay but below header */
             padding: 20px;
-            background-color: #2c2c2c;
+            background-color: rgba(44, 44, 44, 0.9);
             border-radius: 10px;
+            margin: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
 
         h1,
         h2 {
             color: #f4f4f9;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            font-family: 'Trebuchet MS', sans-serif;
+        }
+
+        /* Minimal subtle styling to h2 */
+        h2 {
+            border-bottom: 2px solid #d35400;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+
+        /* Simple Typewriter Effect (No blinking cursor) */
+        .typewriter-text {
+            display: inline-block;
+            white-space: nowrap;
+            overflow: hidden;
+            border-right: 2px solid transparent;
+            animation: typing 3s steps(50, end) forwards;
+            max-width: 100%;
+        }
+
+        @keyframes typing {
+            from {
+                width: 0;
+            }
+
+            to {
+                width: 100%;
+            }
+        }
+
+        /* About content container */
+        .about-content {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .about-content .text {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        /* Adjust the iframe if needed */
+        .about-content iframe {
+            flex: 0 0 auto;
+            border: none;
         }
 
         table {
@@ -54,6 +147,7 @@
             margin-top: 20px;
             background-color: #333;
             border-radius: 8px;
+            overflow: hidden;
         }
 
         table,
@@ -66,6 +160,7 @@
         td {
             padding: 10px;
             text-align: left;
+            transition: background-color 0.3s ease;
         }
 
         th {
@@ -75,6 +170,10 @@
             position: relative;
         }
 
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
         .pagination button {
             margin: 2px;
             padding: 5px 10px;
@@ -82,12 +181,12 @@
             color: #f4f4f9;
             cursor: pointer;
             border-radius: 5px;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.3s;
         }
 
         .pagination button:hover {
             background-color: #d35400;
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
 
         .search input {
@@ -97,6 +196,7 @@
             border: 1px solid #444;
             background-color: #555;
             color: #f4f4f9;
+            transition: border 0.3s ease;
         }
 
         .search input::placeholder {
@@ -130,17 +230,61 @@
             margin: 5px 0;
             cursor: pointer;
         }
+
+        /* Back to top button */
+        #back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background-color: #2c2c2c;
+            color: #f4f4f9;
+            padding: 10px 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        #back-to-top.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Smooth scroll behavior */
+        html {
+            scroll-behavior: smooth;
+        }
     </style>
 </head>
 
 <body>
-    <header></header>
+    <nav>
+        <div class="logo"><a href="#top">Bhop Server</a></div>
+        <div class="nav-links">
+            <a href="#top">Home</a>
+            <a href="#about">About</a>
+            <a href="#maps">Maps</a>
+        </div>
+    </nav>
+    <header id="top"></header>
     <div class="container">
-        <section>
+        <section id="about">
             <h2>About the Server</h2>
-            <p>A Haven for Jump Junkies</p>
+            <p>
+                <span class="typewriter-text">
+                    Welcome to our CS 1.6 Bunny Hop Server! Test your skills on a variety of maps with different
+                    difficulty levels. Connect with the community and enjoy the challenge.
+                </span>
+                <a href="https://www.gametracker.com/server_info/37.221.209.130:27215/" target="_blank"
+                    style="display:inline-block; vertical-align:middle; margin-left:10px;">
+                    <img src="https://cache.gametracker.com/server_info/37.221.209.130:27215/b_350_20_692108_381007_ffffff_000000.png"
+                        border="0" width="350" height="20" alt="Server Banner" />
+                </a>
+            </p>
         </section>
-        <section>
+        <section id="maps">
             <h2>Map List</h2>
             <div class="search">
                 <input type="text" id="search-input" placeholder="Search by Map Name..." oninput="handleSearch()">
@@ -167,6 +311,9 @@
         </section>
     </div>
 
+    <div id="back-to-top" onclick="scrollToTop()">↑</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>
         const rowsPerPage = 50;
         let currentPage = 1;
@@ -298,6 +445,11 @@
                 ? allRows.filter(row => selectedTypes.has(row[1]))
                 : allRows;
 
+            // Also apply difficulty filter if it is set
+            if (selectedDifficulties.size > 0) {
+                filteredRows = filteredRows.filter(row => selectedDifficulties.has(row[2]));
+            }
+
             currentPage = 1;
             displayPage(currentPage);
             updatePagination();
@@ -312,6 +464,11 @@
             filteredRows = (selectedDifficulties.size > 0)
                 ? allRows.filter(row => selectedDifficulties.has(row[2]))
                 : allRows;
+
+            // Also apply type filter if it is set
+            if (selectedTypes.size > 0) {
+                filteredRows = filteredRows.filter(row => selectedTypes.has(row[1]));
+            }
 
             currentPage = 1;
             displayPage(currentPage);
@@ -333,14 +490,30 @@
                     const valueB = b[columnIndex] || '';
                     return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
                 });
+            } else {
+                // Sorting by Map Name (default)
+                filteredRows.sort((a, b) => a[columnIndex].localeCompare(b[columnIndex]));
             }
 
             currentPage = 1;
             displayPage(currentPage);
             updatePagination();
         }
+
+        // Back to top functionality
+        window.addEventListener('scroll', () => {
+            const backToTop = document.getElementById('back-to-top');
+            if (window.scrollY > 200) {
+                backToTop.classList.add('show');
+            } else {
+                backToTop.classList.remove('show');
+            }
+        });
+
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </body>
 
 </html>
