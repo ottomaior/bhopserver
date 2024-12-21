@@ -161,6 +161,7 @@
             padding: 10px;
             text-align: left;
             transition: background-color 0.3s ease;
+            vertical-align: top;
         }
 
         th {
@@ -172,6 +173,23 @@
 
         tr:hover td {
             background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Styles for the comment textarea */
+        .comment-textarea {
+            width: 95%;
+            min-height: 40px;
+            border-radius: 5px;
+            background-color: #555;
+            color: #f4f4f9;
+            border: 1px solid #444;
+            padding: 5px;
+            resize: vertical;
+        }
+
+        .comment-textarea:focus {
+            outline: none;
+            border-color: #d35400;
         }
 
         .pagination button {
@@ -291,6 +309,7 @@
             <table id="map-table">
                 <thead>
                     <tr>
+                        <!-- Sorting on each header: MapName(0), Type(1), Difficulty(2), Comment(3) -->
                         <th onclick="sortTable(0)">Map Name</th>
                         <th>
                             Type
@@ -302,6 +321,8 @@
                             <button onclick="toggleDifficultyDropdown()">▼</button>
                             <div id="difficulty-dropdown"></div>
                         </th>
+                        <!-- Make the comment header clickable to sort by presence of comment -->
+                        <th onclick="sortTable(3)">Comment</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -312,6 +333,7 @@
 
     <div id="back-to-top" onclick="scrollToTop()">↑</div>
 
+    <!-- XLSX library for reading .xlsx files -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>
         const rowsPerPage = 50;
@@ -320,17 +342,21 @@
         let filteredRows = [];
         let selectedTypes = new Set();
         let selectedDifficulties = new Set();
-        let selectedSortType = null;  // Track Type sort
-        let selectedSortDifficulty = null;  // Track Difficulty sort
 
+        let selectedSortType = null;        // Track Type sort asc/desc
+        let selectedSortDifficulty = null;  // Track Difficulty sort asc/desc
+        let selectedSortComment = null;     // Track Comment sort asc/desc
+
+        // --- Load and parse the Excel file ---
         fetch('finalMapList.xlsx')
             .then(response => response.arrayBuffer())
             .then(data => {
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
-
                 const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+                // Convert each row to an array: [MapName, Type, Difficulty]
                 allRows = json.map(row => [
                     row[Object.keys(row)[0]], // Map Name
                     row[Object.keys(row)[1]], // Type
@@ -345,9 +371,11 @@
             })
             .catch(error => {
                 console.error('Error loading the Excel file:', error);
-                document.querySelector('#map-table tbody').innerHTML = '<tr><td colspan="3">Failed to load map list.</td></tr>';
+                document.querySelector('#map-table tbody').innerHTML
+                    = '<tr><td colspan="4">Failed to load map list.</td></tr>';
             });
 
+        // --- Display Table Rows for the current page ---
         function displayPage(page) {
             const tableBody = document.querySelector('#map-table tbody');
             tableBody.innerHTML = '';
@@ -357,15 +385,55 @@
 
             rows.forEach(row => {
                 const tr = document.createElement('tr');
-                row.forEach(cell => {
-                    const td = document.createElement('td');
-                    td.textContent = cell;
-                    tr.appendChild(td);
+
+                // Map Name
+                const tdName = document.createElement('td');
+                tdName.textContent = row[0];
+                tr.appendChild(tdName);
+
+                // Type
+                const tdType = document.createElement('td');
+                tdType.textContent = row[1];
+                tr.appendChild(tdType);
+
+                // Difficulty
+                const tdDifficulty = document.createElement('td');
+                tdDifficulty.textContent = row[2];
+                tr.appendChild(tdDifficulty);
+
+                // Comment (new column)
+                const tdComment = document.createElement('td');
+                const textArea = document.createElement('textarea');
+                textArea.classList.add('comment-textarea');
+                // Retrieve any existing comment from localStorage
+                textArea.value = getCommentForMap(row[0]) || "";
+
+                // Save/update the comment on change
+                textArea.addEventListener('change', (event) => {
+                    saveCommentForMap(row[0], event.target.value);
                 });
+                tdComment.appendChild(textArea);
+
+                tr.appendChild(tdComment);
                 tableBody.appendChild(tr);
             });
         }
 
+        // --- LocalStorage Helpers ---
+        function getCommentForMap(mapName) {
+            // Retrieve saved comments (as an object) from localStorage
+            const savedComments = JSON.parse(localStorage.getItem('mapComments') || '{}');
+            return savedComments[mapName] || "";
+        }
+
+        function saveCommentForMap(mapName, comment) {
+            // Get existing comments, update for this map, then save
+            const savedComments = JSON.parse(localStorage.getItem('mapComments') || '{}');
+            savedComments[mapName] = comment;
+            localStorage.setItem('mapComments', JSON.stringify(savedComments));
+        }
+
+        // --- Pagination ---
         function updatePagination() {
             const pagination = document.getElementById('pagination');
             pagination.innerHTML = '';
@@ -384,22 +452,25 @@
             }
         }
 
+        // --- Search by Map Name ---
         function handleSearch() {
             const query = document.getElementById('search-input').value.toLowerCase();
             filteredRows = allRows.filter(row =>
                 row[0].toLowerCase().includes(query)
             );
+            // Also keep Type & Difficulty filters in mind
+            applyTypeAndDifficultyFilters();
             currentPage = 1;
             displayPage(currentPage);
             updatePagination();
         }
 
+        // --- Populate Type & Difficulty Checklists ---
         function populateTypeDropdown() {
             const typeDropdown = document.getElementById('type-dropdown');
             typeDropdown.innerHTML = '';
 
             const uniqueTypes = [...new Set(allRows.map(row => row[1]))].sort();
-
             uniqueTypes.forEach(type => {
                 const label = document.createElement('label');
                 label.innerHTML = `
@@ -414,7 +485,6 @@
             difficultyDropdown.innerHTML = '';
 
             const uniqueDifficulties = [...new Set(allRows.map(row => row[2]))].sort();
-
             uniqueDifficulties.forEach(difficulty => {
                 const label = document.createElement('label');
                 label.innerHTML = `
@@ -424,6 +494,7 @@
             });
         }
 
+        // --- Filter By Type & Difficulty ---
         function toggleTypeDropdown() {
             const dropdown = document.getElementById('type-dropdown');
             dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
@@ -439,19 +510,7 @@
             selectedTypes = new Set(
                 [...checkboxes].filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
             );
-
-            filteredRows = (selectedTypes.size > 0)
-                ? allRows.filter(row => selectedTypes.has(row[1]))
-                : allRows;
-
-            // Also apply difficulty filter if it is set
-            if (selectedDifficulties.size > 0) {
-                filteredRows = filteredRows.filter(row => selectedDifficulties.has(row[2]));
-            }
-
-            currentPage = 1;
-            displayPage(currentPage);
-            updatePagination();
+            applyTypeAndDifficultyFilters();
         }
 
         function filterByDifficulty() {
@@ -459,23 +518,33 @@
             selectedDifficulties = new Set(
                 [...checkboxes].filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
             );
+            applyTypeAndDifficultyFilters();
+        }
 
-            filteredRows = (selectedDifficulties.size > 0)
-                ? allRows.filter(row => selectedDifficulties.has(row[2]))
-                : allRows;
+        function applyTypeAndDifficultyFilters() {
+            // Start with allRows, then filter by type & difficulty
+            filteredRows = allRows.filter(row => {
+                const [mapName, mapType, mapDifficulty] = row;
+                const matchType = selectedTypes.size ? selectedTypes.has(mapType) : true;
+                const matchDiff = selectedDifficulties.size ? selectedDifficulties.has(mapDifficulty) : true;
+                return matchType && matchDiff;
+            });
 
-            // Also apply type filter if it is set
-            if (selectedTypes.size > 0) {
-                filteredRows = filteredRows.filter(row => selectedTypes.has(row[1]));
-            }
+            // Also apply the current search query
+            const query = document.getElementById('search-input').value.toLowerCase();
+            filteredRows = filteredRows.filter(row =>
+                row[0].toLowerCase().includes(query)
+            );
 
             currentPage = 1;
             displayPage(currentPage);
             updatePagination();
         }
 
+        // --- Sorting ---
         function sortTable(columnIndex) {
             if (columnIndex === 1) {
+                // Sorting by Type
                 const isAscending = selectedSortType = !selectedSortType;
                 filteredRows.sort((a, b) => {
                     const valueA = a[columnIndex] || '';
@@ -483,14 +552,39 @@
                     return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
                 });
             } else if (columnIndex === 2) {
+                // Sorting by Difficulty
                 const isAscending = selectedSortDifficulty = !selectedSortDifficulty;
                 filteredRows.sort((a, b) => {
                     const valueA = a[columnIndex] || '';
                     const valueB = b[columnIndex] || '';
                     return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
                 });
+            } else if (columnIndex === 3) {
+                // Sorting by Comment
+                // We'll toggle ascending/descending so the user can click again to reverse
+                const isAscending = selectedSortComment = !selectedSortComment;
+
+                filteredRows.sort((a, b) => {
+                    const commentA = getCommentForMap(a[0]) || '';
+                    const commentB = getCommentForMap(b[0]) || '';
+
+                    // Decide how you want to sort:
+                    // 1) "Maps with comments" first, then "no comment"
+                    // 2) Among those with comments, sort by alphabetical or length, etc.
+
+                    const hasA = commentA.trim().length > 0;
+                    const hasB = commentB.trim().length > 0;
+
+                    // If we want commented maps at the top in "ascending" click:
+                    // (Feel free to invert logic depending on which click should show commented first)
+                    if (hasA && !hasB) return isAscending ? -1 : 1;
+                    if (!hasA && hasB) return isAscending ? 1 : -1;
+
+                    // If both have comment or both have none, sort by alphabetical text
+                    return commentA.localeCompare(commentB);
+                });
             } else {
-                // Sorting by Map Name (default)
+                // Sorting by Map Name (columnIndex = 0)
                 filteredRows.sort((a, b) => a[columnIndex].localeCompare(b[columnIndex]));
             }
 
@@ -499,7 +593,7 @@
             updatePagination();
         }
 
-        // Back to top functionality
+        // --- Back to top functionality ---
         window.addEventListener('scroll', () => {
             const backToTop = document.getElementById('back-to-top');
             if (window.scrollY > 200) {
